@@ -1,25 +1,45 @@
-- name: Save Docker image
-  run: docker save -o app.tar muqadam99/ci-cd-node-app:latest
+name: Build and Deploy to EC2 (Direct Docker Image)
 
-- name: Copy image to EC2
-  uses: appleboy/scp-action@v0.1.4
-  with:
-    host: ${{ secrets.EC2_HOST }}
-    username: ubuntu
-    key: ${{ secrets.EC2_SSH_KEY }}
-    port: 22
-    source: "app.tar"
-    target: "~/"
+on:
+  push:
+    branches: [ "main" ]
 
-- name: Load and run image on EC2
-  uses: appleboy/ssh-action@v1.0.0
-  with:
-    host: ${{ secrets.EC2_HOST }}
-    username: ubuntu
-    key: ${{ secrets.EC2_SSH_KEY }}
-    port: 22
-    script: |
-      docker load -i ~/app.tar
-      docker stop app || true
-      docker rm app || true
-      docker run -d -p 80:3000 --name app muqadam99/ci-cd-node-app:latest
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image
+        run: docker build -t muqadam99/ci-cd-node-app:latest .
+
+      - name: Save Docker image to tar file
+        run: docker save muqadam99/ci-cd-node-app:latest -o app.tar
+
+      - name: Copy image to EC2 using SCP
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          source: "app.tar"
+          target: "~/"
+
+      - name: SSH into EC2 and run container
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            docker load -i app.tar
+            docker stop app || true
+            docker rm app || true
+            docker run -d -p 80:3000 --name app muqadam99/ci-cd-node-app:latest
