@@ -1,4 +1,4 @@
-name: Build, Push, and Test Docker Image
+name: Build, Push, and Deploy Docker Image
 
 on:
   push:
@@ -28,19 +28,20 @@ jobs:
           push: true
           tags: muqadam99/ci-cd-node-app:latest
 
-  test:
+  deploy:
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      - name: Pull the pushed Docker image
-        run: docker pull muqadam99/ci-cd-node-app:latest
-
-      - name: Run the Docker container and test the app
-        run: |
-          docker run -d -p 3000:3000 --name app muqadam99/ci-cd-node-app:latest
-          sleep 5
-          docker logs app
-          curl -f http://localhost:3000
-          docker stop app
-          docker rm app
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            docker pull muqadam99/ci-cd-node-app:latest
+            docker stop app || true
+            docker rm app || true
+            docker run -d -p 80:3000 --name app muqadam99/ci-cd-node-app:latest
